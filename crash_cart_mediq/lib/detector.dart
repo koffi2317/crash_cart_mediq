@@ -1,8 +1,4 @@
-import 'package:flutter/material.dart';
-class Detector extends StatelessWidget {
-  const Detector({super.key});
-
-
+class Detector {
 int Fr;
 int Sat;
 String medicament;
@@ -10,15 +6,13 @@ String medicament;
 void analyser(row){ 
 
 
+void isWrongDrug(row);
 
+void isWrongDose(row);
 
-void _isWrongDrug(row);
+void isWrongAdministration(row);
 
-_void isWrongDose(row);
-
-_void isWrongAdministration(row);
-
-_void isIllogicalForVitals(row);
+void isIllogicalForVitals(row);
 
 
 
@@ -26,8 +20,4 @@ _void isIllogicalForVitals(row);
 
 
 
-  @override
-  Widget build(BuildContext context) {
-    return Container();
-  }
 }
