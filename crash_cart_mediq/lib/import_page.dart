@@ -14,16 +14,17 @@ class ImportPage extends StatefulWidget {
 
 class _ImportPageState extends State<ImportPage> {
   String fileName = 'Aucun fichier importé';
-  List<String> resultats = [];
+
+  // Liste des résultats (chaque élément = Map)
+  List<Map<String, dynamic>> resultats = [];
 
   Future<void> pickFile() async {
-    // Ouvre le sélecteur de fichiers
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'xlsx'],
     );
 
-    if (result == null) return; // utilisateur a annulé
+    if (result == null) return;
 
     final path = result.files.single.path!;
     final name = result.files.single.name;
@@ -33,7 +34,6 @@ class _ImportPageState extends State<ImportPage> {
       resultats.clear();
     });
 
-    // Lecture du fichier selon son extension
     if (path.endsWith('.csv')) {
       await _readCsv(path);
     } else if (path.endsWith('.xlsx')) {
@@ -41,11 +41,17 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
+  // -----------------------------
+  // LECTURE CSV
+  // -----------------------------
   Future<void> _readCsv(String path) async {
     final input = File(path).openRead();
-    final csv = await input.transform(utf8.decoder).transform(const CsvToListConverter()).toList();
+    final csv = await input
+        .transform(utf8.decoder)
+        .transform(const CsvToListConverter())
+        .toList();
 
-    csv.removeAt(0); // retire l’en-tête
+    csv.removeAt(0); // retirer l’en-tête
     final detector = Detector();
 
     for (var row in csv) {
@@ -63,11 +69,24 @@ class _ImportPageState extends State<ImportPage> {
         concentration: double.tryParse(row[10].toString()) ?? 0,
         administration: row[11],
       );
-      var erreurs = detector.analyser(ligne);
-      setState(() => resultats.add('Patient ${ligne.idPatient} (${ligne.heure}) : ${erreurs.join(", ")}'));
+
+      var resultat = detector.analyser(ligne);
+
+      setState(() {
+        resultats.add({
+          "patient": ligne.idPatient,
+          "heure": ligne.heure,
+          "status": resultat["status"],
+          "message": resultat["message"],
+          "type": resultat["type"]
+        });
+      });
     }
   }
 
+  // -----------------------------
+  // LECTURE EXCEL
+  // -----------------------------
   Future<void> _readExcel(String path) async {
     var bytes = File(path).readAsBytesSync();
     var excel = Excel.decodeBytes(bytes);
@@ -76,6 +95,7 @@ class _ImportPageState extends State<ImportPage> {
     for (var table in excel.tables.keys) {
       for (var row in excel.tables[table]!.rows.skip(1)) {
         if (row.length < 12) continue;
+
         var ligne = LigneData(
           idPatient: row[0]?.value ?? 0,
           heure: row[1]?.value ?? '',
@@ -90,12 +110,25 @@ class _ImportPageState extends State<ImportPage> {
           concentration: double.tryParse(row[10]?.value.toString() ?? '0') ?? 0,
           administration: row[11]?.value ?? '',
         );
-        var erreurs = detector.analyser(ligne);
-        setState(() => resultats.add('Patient ${ligne.idPatient} (${ligne.heure}) : ${erreurs.join(", ")}'));
+
+        var resultat = detector.analyser(ligne);
+
+        setState(() {
+          resultats.add({
+            "patient": ligne.idPatient,
+            "heure": ligne.heure,
+            "status": resultat["status"],
+            "message": resultat["message"],
+            "type": resultat["type"]
+          });
+        });
       }
     }
   }
 
+  // -----------------------------
+  // UI
+  // -----------------------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -112,13 +145,30 @@ class _ImportPageState extends State<ImportPage> {
             const SizedBox(height: 10),
             Text('Fichier sélectionné : $fileName'),
             const Divider(),
+
+            // LISTE DES RÉSULTATS
             Expanded(
               child: ListView.builder(
                 itemCount: resultats.length,
                 itemBuilder: (context, index) {
+                  var r = resultats[index];
+                  bool ok = r["status"] == "ok";
+
                   return ListTile(
-                    leading: const Icon(Icons.medication),
-                    title: Text(resultats[index]),
+                    leading: Icon(
+                      ok ? Icons.check_circle : Icons.error,
+                      color: ok ? Colors.green : Colors.red,
+                    ),
+                    title: Text(
+                      "Patient ${r["patient"]} — ${r["heure"]}",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: ok ? Colors.green : Colors.red,
+                      ),
+                    ),
+                    subtitle: Text(
+                      ok ? "OK" : "${r["message"]} (${r["type"]})",
+                    ),
                   );
                 },
               ),
