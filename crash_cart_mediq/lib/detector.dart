@@ -9,7 +9,7 @@ int Tad;
 int Temp;
 //medication variables
 double dose; 
-double consentration;
+double concentration;
 String administration;
 String medicament;
 //variable juste [pour le moment] pour identifier le patient
@@ -25,6 +25,8 @@ void analyser(row){
 
 if(administration=="Perfusion"){
   print("ok");
+  lastDose[idPatient] = dose;
+  return;
 
 
 }
@@ -51,11 +53,13 @@ else if ((dose * concentration) > 100 || (dose * concentration) < 0.1) {
 }
 
 // 4) Dose très différente de la précédente
-else if (lastDose[idPatient] != null &&
-        (dose > lastDose[idPatient] * 5 || dose < lastDose[idPatient] / 5)) {
+else if (lastDose.containsKey(idPatient) &&
+        (dose > lastDose[idPatient]! * 5 || dose < lastDose[idPatient]! / 5)) {
+ {
   return isWrongDose(row);
-}
+ } 
 
+        }
 
 
 else if (administration == "IM" && concentration > 50) {
@@ -94,9 +98,9 @@ else if (Fr < 5 && Sat > 95) {
 
 
 
-  print("ok");
+   print("ok");
 lastDose[idPatient] = dose;
-
+return;
 }
 
 
