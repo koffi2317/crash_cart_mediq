@@ -16,19 +16,36 @@ String medicament;
 int idPatient; 
 String heure;
 
-void analyser(row){ 
+void analyser(row){
 
-
-void isWrongDrug(row);
-
-void isWrongDose(row);
-
-void isWrongAdministration(row);
-
-void isIllogicalForVitals(row);
+if ( FR<8 && Sat<90 && ){ 
 
 
 }
+
+
+}
+
+
+
+
+void isWrongDrug(row){
+
+}
+
+void isWrongDose(row){
+
+}
+
+void isWrongAdministration(row){
+
+}
+
+void isIllogicalForVitals(row){}
+
+
+
+
 
 
 }
