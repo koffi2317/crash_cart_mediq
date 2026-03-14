@@ -1,14 +1,20 @@
 class Detector {
+//signes vitaux;
 int Fr;
 int Sat;
 int Fc; 
 int Tas; 
-int idPatient; 
+int Tad;
+
 int Temp;
+//medication variables
 double dose; 
 double consentration;
 String administration;
 String medicament;
+//variable juste [pour le moment] pour identifier le patient
+int idPatient; 
+String heure;
 
 void analyser(row){ 
 
@@ -22,9 +28,7 @@ void isWrongAdministration(row);
 void isIllogicalForVitals(row);
 
 
-
 }
-
 
 
 }
