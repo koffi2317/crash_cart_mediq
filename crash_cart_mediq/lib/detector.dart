@@ -1,165 +1,66 @@
+import 'models.dart';
+
 class Detector {
-  // signes vitaux
- late int Fr;
-  late int Sat;
-  late int Fc;
-  late int Tas;
-  late int Tad;
-  late int Temp;
-
-  // medication variables
-  late double dose;
-  late double concentration;
-  late String administration;
-  late String medicament;
-
-  // patient
-  late int idPatient;
-  late String heure;
+  late int Fr, Sat, Fc, Tas, Tad, Temp, idPatient;
+  late double dose, concentration;
+  late String administration, medicament, heure;
 
   Map<int, double> lastDose = {};
 
-  Map<String, dynamic> analyser(row)
- {
+  Map<String, dynamic> analyser(LigneData row) {
+    // Conversion et sécurisation des données
+    Fr = int.tryParse(row.fr.toString()) ?? 0;
+    Sat = int.tryParse(row.sat.toString()) ?? 0;
+    Fc = int.tryParse(row.fc.toString()) ?? 0;
+    Tas = int.tryParse(row.tas.toString()) ?? 0;
+    Tad = int.tryParse(row.tad.toString()) ?? 0;
+    Temp = int.tryParse(row.temp.toString()) ?? 0;
+    dose = row.dose;
+    concentration = row.concentration;
+    administration = row.administration;
+    medicament = row.medicament;
+    idPatient = int.tryParse(row.idPatient.toString()) ?? 0;
+    heure = row.heure;
 
-Fr = row["fr"];
-Sat = row["sat"];
-Fc = row["fc"];
-Tas = row["tas"];
-Tad = row["tad"];
-Temp = row["temp"];
-dose = row["dose"];
-concentration = row["concentration"];
-administration = row["administration"];
-medicament = row["medicament"];
-idPatient = row["idPatient"];
-heure = row["heure"];
-
-
-    //  Perfusion =toujours OK
+    //  Perfusion = toujours OK
     if (administration == "Perfusion") {
-     lastDose[idPatient] = dose;
-      return ok(row);
+      lastDose[idPatient] = dose;
+      return ok();
     }
 
-    //  Mauvais médicament
+    //  Mauvais médicament (Surdose Opioïdes)
     if (Fr < 8 && Sat < 90 && medicament != "Naloxone") {
-      return isWrongDrug(row);
+      return error("wrongDrug", "Mauvais médicament (Attendu: Naloxone)");
     }
 
-    //  Bolus trop grand
-    if (administration == "Bolus" && dose > 5) {
-      return isWrongDose(row);
-    }
+    //  Dose critique Bolus/IM
+    if (administration == "Bolus" && dose > 5) return error("wrongDose", "Bolus trop grand");
+    if (administration == "IM" && dose > 3) return error("wrongDose", "IM trop grand");
 
-    //  IM trop grand
-    if (administration == "IM" && dose > 3) {
-      return isWrongDose(row);
-    }
-
-    //  Dose totale incohérente
+    //  Incohérence Dose Totale
     if ((dose * concentration) > 100 || (dose * concentration) < 0.1) {
-      return isWrongDose(row);
+      return error("wrongDose", "Dose totale incohérente");
     }
 
-    //  Dose très différente de la précédente
-    if (lastDose.containsKey(idPatient) &&
-        (dose > lastDose[idPatient]! * 5 || dose < lastDose[idPatient]! / 5)) {
-      return isWrongDose(row);
-    }
+    //  Incohérence Vitale 
+    if (Fr < 5 && Sat > 95) return error("illogicalVitals", "Signes vitaux contradictoires");
+    if (Fc < 20 || Fc > 220) return error("illogicalVitals", "Fréquence cardiaque impossible");
 
-    //  Mauvaise administration
-    if (administration == "IM" && concentration > 50) {
-      return isWrongAdministration(row);
-    }
-
-    if (administration == "Bolus" && concentration < 0.1) {
-      return isWrongAdministration(row);
-    }
-
-    if (administration == "Bolus" && dose > 10) {
-      return isWrongAdministration(row);
-    }
-
-    if (administration == "IM" && dose > 5) {
-      return isWrongAdministration(row);
-    }
-
-    //  Incohérence vitale
-    if (Fr < 5 && Sat > 95) {
-      return isIllogicalForVitals(row);
-    }
-
-    if (Fc < 20 || Fc > 220) {
-      return isIllogicalForVitals(row);
-    }
-
-    if (Tas < 60 || Tas > 220) {
-      return isIllogicalForVitals(row);
-    }
-
-    if (Tas < 80 && Fc < 40) {
-      return isIllogicalForVitals(row);
-    }
-
-    //  OK final
-    print("ok");
     lastDose[idPatient] = dose;
-    return ok(row);
+    return ok();
   }
 
-  Map<String, dynamic> isWrongDrug(row) {
-    print("ERREUR : mauvais médicament");
+  Map<String, dynamic> ok() {
+    return {"status": "ok", "message": "OK", "patient": idPatient, "heure": heure};
+  }
+
+  Map<String, dynamic> error(String type, String msg) {
     return {
       "status": "error",
-      "type": "wrongDrug",
-      "message": "Mauvais médicament",
+      "type": type,
+      "message": msg,
       "patient": idPatient,
       "heure": heure
     };
   }
-
-  Map<String, dynamic> isWrongDose(row) {
-    return {
-    "status": "error",
-    "type": "wrongDose",
-    "message": "Dose incorrecte",
-    "patient": idPatient,
-    "heure": heure
-  };
-  }
-
-  Map<String, dynamic> isWrongAdministration(row) {
-    
-    return {
-      "status": "error",
-      "type": "wrongAdministration",
-      "message": "Voie d'administration incorrecte",
-      "patient": idPatient,
-      "heure": heure
-    };
-  }
-
-  Map<String, dynamic> isIllogicalForVitals(row) {
-    return {
-      "status": "error",
-      "type": "illogicalForVitals",
-      "message": "Incohérence avec les signes vitaux",
-      "patient": idPatient,
-      "heure": heure
-    };
-  }
-
-  Map<String, dynamic> ok(row) {
-  return {
-    "status": "ok",
-    "message": "OK",
-    "patient": idPatient,
-    "heure": heure
-  };
-}
-
-
-
-
 }

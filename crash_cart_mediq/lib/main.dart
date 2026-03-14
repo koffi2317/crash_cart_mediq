@@ -1,163 +1,98 @@
-import 'package:flutter/material.dart';
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
+import 'models.dart';
 import 'detector.dart';
 
-void main() {
-  runApp(const CrashCartApp());
-}
-
-class CrashCartApp extends StatelessWidget {
-  const CrashCartApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Crash Cart MEDIQ',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const ImportPage(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-}
+void main() => runApp(const MaterialApp(home: ImportPage(), debugShowCheckedModeBanner: false));
 
 class ImportPage extends StatefulWidget {
   const ImportPage({super.key});
-
   @override
   State<ImportPage> createState() => _ImportPageState();
 }
 
 class _ImportPageState extends State<ImportPage> {
-  String fichier = 'Aucun fichier sélectionné';
-  List<String> resultats = [];
+  String fileName = 'Aucun fichier importé';
+  List<Map<String, dynamic>> resultats = [];
 
-  // Fonction principale pour choisir un fichier
-  Future<void> importerFichier() async {
+  Future<void> pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'xlsx'],
     );
-
-    if (result == null) return; // utilisateur a annulé
-
-    String? fichierPath = result.files.single.path;
-    String nomFichier = result.files.single.name;
-
-    setState(() {
-      fichier = nomFichier;
-      resultats.clear();
-    });
-
-    if (fichierPath == null) return;
-
-    // Lecture et analyse du fichier
-    if (fichierPath.endsWith('.csv')) {
-      await lireCSV(fichierPath);
-    } else if (fichierPath.endsWith('.xlsx')) {
-      await lireExcel(fichierPath);
-    }
+    if (result == null) return;
+    final path = result.files.single.path!;
+    setState(() { fileName = result.files.single.name; resultats.clear(); });
+    path.endsWith('.csv') ? await _readCsv(path) : await _readExcel(path);
   }
 
-  Future<void> lireCSV(String path) async {
-    final input = File(path).openRead();
-    final csv = await input
-        .transform(utf8.decoder)
-        .transform(const CsvToListConverter())
-        .toList();
-
-    if (csv.isEmpty) return;
-    csv.removeAt(0); // retire l’en‑tête
-
-    Detector detecteur = Detector();
-
-    for (var ligne in csv) {
-      LigneData data = LigneData(
-        idPatient: ligne[0],
-        heure: ligne[1],
-        fc: ligne[2],
-        tas: ligne[3],
-        tad: ligne[4],
-        fr: ligne[5],
-        sat: ligne[6],
-        temp: ligne[7],
-        medicament: ligne[8],
-        dose: double.tryParse(ligne[9].toString()) ?? 0,
-        concentration: double.tryParse(ligne[10].toString()) ?? 0,
-        administration: ligne[11],
-      );
-
-      List<String> erreurs = detecteur.analyser(data);
-      setState(() => resultats.add(
-          'Patient ${data.idPatient} (${data.heure}) : ${erreurs.join(", ")}'));
-    }
+  Future<void> _readCsv(String path) async {
+    final bytes = await File(path).readAsBytes();
+    final csv = const CsvToListConverter().convert(utf8.decode(bytes));
+    csv.removeAt(0);
+    _processRows(csv);
   }
 
-  Future<void> lireExcel(String path) async {
+  Future<void> _readExcel(String path) async {
     var bytes = File(path).readAsBytesSync();
     var excel = Excel.decodeBytes(bytes);
-    Detector detecteur = Detector();
-
     for (var table in excel.tables.keys) {
-      for (var row in excel.tables[table]!.rows.skip(1)) {
-        if (row.length < 12) continue;
+      var rows = excel.tables[table]!.rows.skip(1).map((r) => r.map((c) => c?.value).toList()).toList();
+      _processRows(rows);
+    }
+  }
 
-        LigneData data = LigneData(
-          idPatient: row[0]?.value ?? 0,
-          heure: row[1]?.value ?? '',
-          fc: row[2]?.value ?? 0,
-          tas: row[3]?.value ?? 0,
-          tad: row[4]?.value ?? 0,
-          fr: row[5]?.value ?? 0,
-          sat: row[6]?.value ?? 0,
-          temp: row[7]?.value ?? 0,
-          medicament: row[8]?.value ?? '',
-          dose: double.tryParse(row[9]?.value.toString() ?? '0') ?? 0,
-          concentration: double.tryParse(row[10]?.value.toString() ?? '0') ?? 0,
-          administration: row[11]?.value ?? '',
-        );
-
-        List<String> erreurs = detecteur.analyser(data);
-        setState(() => resultats.add(
-            'Patient ${data.idPatient} (${data.heure}) : ${erreurs.join(", ")}'));
-      }
+  void _processRows(List<List<dynamic>> rows) {
+    final detector = Detector();
+    for (var row in rows) {
+      if (row.length < 12) continue;
+      var data = LigneData(
+        idPatient: row[0], heure: row[1].toString(),
+        fc: row[2], tas: row[3], tad: row[4], fr: row[5], sat: row[6], temp: row[7],
+        medicament: row[8].toString(),
+        dose: double.tryParse(row[9].toString()) ?? 0,
+        concentration: double.tryParse(row[10].toString()) ?? 0,
+        administration: row[11].toString(),
+      );
+      var res = detector.analyser(data);
+      setState(() => resultats.add(res));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Analyse des fichiers médicaux')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            ElevatedButton.icon(
-              onPressed: importerFichier,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Importer un fichier (.csv ou .xlsx)'),
+      backgroundColor: Colors.grey[100],
+      appBar: AppBar(title: const Text('MEDIQ Crash Cart Monitor'), backgroundColor: Colors.blueGrey),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton.icon(onPressed: pickFile, icon: const Icon(Icons.upload), label: const Text("Importer Fichier")),
+          ),
+          Text(fileName, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const Divider(),
+          Expanded(
+            child: ListView.builder(
+              itemCount: resultats.length,
+              itemBuilder: (context, i) {
+                bool isErr = resultats[i]["status"] == "error";
+                return Card(
+                  color: isErr ? Colors.red[50] : Colors.green[50],
+                  child: ListTile(
+                    leading: Icon(isErr ? Icons.warning : Icons.check_circle, color: isErr ? Colors.red : Colors.green),
+                    title: Text("Patient ${resultats[i]["patient"]} - ${resultats[i]["heure"]}"),
+                    subtitle: Text(resultats[i]["message"]),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 10),
-            Text('Fichier sélectionné : $fichier'),
-            const Divider(),
-            Expanded(
-              child: ListView.builder(
-                itemCount: resultats.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    leading: const Icon(Icons.medication),
-                    title: Text(resultats[index]),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

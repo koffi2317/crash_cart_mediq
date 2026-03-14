@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:convert'; 
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'detector.dart';
+import 'models.dart'; 
 
 class ImportPage extends StatefulWidget {
   const ImportPage({super.key});
@@ -14,8 +16,6 @@ class ImportPage extends StatefulWidget {
 
 class _ImportPageState extends State<ImportPage> {
   String fileName = 'Aucun fichier importé';
-
-  // Liste des résultats (chaque élément = Map)
   List<Map<String, dynamic>> resultats = [];
 
   Future<void> pickFile() async {
@@ -41,9 +41,6 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
-  // -----------------------------
-  // LECTURE CSV
-  // -----------------------------
   Future<void> _readCsv(String path) async {
     final input = File(path).openRead();
     final csv = await input
@@ -51,42 +48,32 @@ class _ImportPageState extends State<ImportPage> {
         .transform(const CsvToListConverter())
         .toList();
 
-    csv.removeAt(0); // retirer l’en-tête
+    if (csv.isEmpty) return;
+    csv.removeAt(0); // Retirer l'en-tête
     final detector = Detector();
 
     for (var row in csv) {
+      if (row.length < 12) continue;
       var ligne = LigneData(
         idPatient: row[0],
-        heure: row[1],
+        heure: row[1].toString(),
         fc: row[2],
         tas: row[3],
         tad: row[4],
         fr: row[5],
         sat: row[6],
         temp: row[7],
-        medicament: row[8],
+        medicament: row[8].toString(),
         dose: double.tryParse(row[9].toString()) ?? 0,
         concentration: double.tryParse(row[10].toString()) ?? 0,
-        administration: row[11],
+        administration: row[11].toString(),
       );
 
       var resultat = detector.analyser(ligne);
-
-      setState(() {
-        resultats.add({
-          "patient": ligne.idPatient,
-          "heure": ligne.heure,
-          "status": resultat["status"],
-          "message": resultat["message"],
-          "type": resultat["type"]
-        });
-      });
+      _updateUI(ligne, resultat);
     }
   }
 
-  // -----------------------------
-  // LECTURE EXCEL
-  // -----------------------------
   Future<void> _readExcel(String path) async {
     var bytes = File(path).readAsBytesSync();
     var excel = Excel.decodeBytes(bytes);
@@ -98,41 +85,44 @@ class _ImportPageState extends State<ImportPage> {
 
         var ligne = LigneData(
           idPatient: row[0]?.value ?? 0,
-          heure: row[1]?.value ?? '',
+          heure: row[1]?.value.toString() ?? '',
           fc: row[2]?.value ?? 0,
           tas: row[3]?.value ?? 0,
           tad: row[4]?.value ?? 0,
           fr: row[5]?.value ?? 0,
           sat: row[6]?.value ?? 0,
           temp: row[7]?.value ?? 0,
-          medicament: row[8]?.value ?? '',
+          medicament: row[8]?.value.toString() ?? '',
           dose: double.tryParse(row[9]?.value.toString() ?? '0') ?? 0,
           concentration: double.tryParse(row[10]?.value.toString() ?? '0') ?? 0,
-          administration: row[11]?.value ?? '',
+          administration: row[11]?.value.toString() ?? '',
         );
 
         var resultat = detector.analyser(ligne);
-
-        setState(() {
-          resultats.add({
-            "patient": ligne.idPatient,
-            "heure": ligne.heure,
-            "status": resultat["status"],
-            "message": resultat["message"],
-            "type": resultat["type"]
-          });
-        });
+        _updateUI(ligne, resultat);
       }
     }
   }
 
-  // -----------------------------
-  // UI
-  // -----------------------------
+  void _updateUI(LigneData ligne, Map<String, dynamic> resultat) {
+    setState(() {
+      resultats.add({
+        "patient": ligne.idPatient,
+        "heure": ligne.heure,
+        "status": resultat["status"],
+        "message": resultat["message"],
+        "type": resultat["type"]
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Analyse des fichiers médicaux')),
+      appBar: AppBar(
+        title: const Text('Analyse des fichiers médicaux'),
+        backgroundColor: Colors.blueGrey,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -143,31 +133,23 @@ class _ImportPageState extends State<ImportPage> {
               label: const Text('Importer un fichier (.csv ou .xlsx)'),
             ),
             const SizedBox(height: 10),
-            Text('Fichier sélectionné : $fileName'),
+            Text('Fichier : $fileName', style: const TextStyle(fontWeight: FontWeight.bold)),
             const Divider(),
-
-            // LISTE DES RÉSULTATS
             Expanded(
               child: ListView.builder(
                 itemCount: resultats.length,
                 itemBuilder: (context, index) {
                   var r = resultats[index];
-                  bool ok = r["status"] == "ok";
-
-                  return ListTile(
-                    leading: Icon(
-                      ok ? Icons.check_circle : Icons.error,
-                      color: ok ? Colors.green : Colors.red,
-                    ),
-                    title: Text(
-                      "Patient ${r["patient"]} — ${r["heure"]}",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: ok ? Colors.green : Colors.red,
+                  bool isError = r["status"] == "error";
+                  return Card(
+                    color: isError ? Colors.red[50] : Colors.white,
+                    child: ListTile(
+                      leading: Icon(
+                        isError ? Icons.error : Icons.check_circle,
+                        color: isError ? Colors.red : Colors.green,
                       ),
-                    ),
-                    subtitle: Text(
-                      ok ? "OK" : "${r["message"]} (${r["type"]})",
+                      title: Text("Patient ${r["patient"]} — ${r["heure"]}"),
+                      subtitle: Text("${r["message"]} ${isError ? '(${r["type"]})' : ''}"),
                     ),
                   );
                 },
