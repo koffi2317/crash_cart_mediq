@@ -17,7 +17,7 @@ int idPatient;
 String heure;
 
 Map<int, double> lastDose = {};
-lastDose[idPatient] = dose;
+
 
 
 
@@ -58,15 +58,39 @@ else if (lastDose[idPatient] != null &&
 
 
 
-else if (){
-  return isWrongAdministration(row);
-}
+else if (administration == "IM" && concentration > 50) {
+    return isWrongAdministration(row);
+  }
 
-else if (){ 
+  //  Médicament très dilué donné en bolus → suspect
+  else if (administration == "Bolus" && concentration < 0.1) {
+    return isWrongAdministration(row);
+  }
 
-  return isIllogicalForVitals(row);
+  //  Volume incohérent pour la voie (sécurité supplémentaire)
+  else if (administration == "Bolus" && dose > 10) {
+    return isWrongAdministration(row);
+  }
+  else if (administration == "IM" && dose > 5) {
+    return isWrongAdministration(row);
+  }
 
-}
+else if (Fr < 5 && Sat > 95) {
+    return isIllogicalForVitals(row);
+  }
+
+  //  Valeurs extrêmes
+  else if (Fc < 20 || Fc > 220) {
+    return isIllogicalForVitals(row);
+  }
+  else if (Tas < 60 || Tas > 220) {
+    return isIllogicalForVitals(row);
+  }
+
+  //  Tension très basse + FC très basse → incohérent
+  else if (Tas < 80 && Fc < 40) {
+    return isIllogicalForVitals(row);
+  }
 
 
 
