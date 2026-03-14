@@ -1,44 +1,45 @@
 class Detector {
   // signes vitaux
-  int Fr;
-  int Sat;
-  int Fc;
-  int Tas;
-  int Tad;
-  int Temp;
+ late int Fr;
+  late int Sat;
+  late int Fc;
+  late int Tas;
+  late int Tad;
+  late int Temp;
 
   // medication variables
-  double dose;
-  double concentration;
-  String administration;
-  String medicament;
+  late double dose;
+  late double concentration;
+  late String administration;
+  late String medicament;
 
   // patient
-  int idPatient;
-  String heure;
+  late int idPatient;
+  late String heure;
 
   Map<int, double> lastDose = {};
 
-  void analyser(row) {
+  Map<String, dynamic> analyser(row)
+ {
 
-Fr = row.fr;
-Sat = row.sat;
-Fc = row.fc;
-Tas = row.tas;
-Tad = row.tad;
-Temp = row.temp;
-dose = row.dose;
-concentration = row.concentration;
-administration = row.administration;
-medicament = row.medicament;
-idPatient = row.idPatient;
-heure = row.heure;
+Fr = row["fr"];
+Sat = row["sat"];
+Fc = row["fc"];
+Tas = row["tas"];
+Tad = row["tad"];
+Temp = row["temp"];
+dose = row["dose"];
+concentration = row["concentration"];
+administration = row["administration"];
+medicament = row["medicament"];
+idPatient = row["idPatient"];
+heure = row["heure"];
+
 
     //  Perfusion =toujours OK
     if (administration == "Perfusion") {
-      print("ok");
-      lastDose[idPatient] = dose;
-      return;
+     lastDose[idPatient] = dose;
+      return ok(row);
     }
 
     //  Mauvais médicament
@@ -104,7 +105,7 @@ heure = row.heure;
     //  OK final
     print("ok");
     lastDose[idPatient] = dose;
-    return;
+    return ok(row);
   }
 
   Map<String, dynamic> isWrongDrug(row) {
@@ -148,4 +149,17 @@ heure = row.heure;
       "heure": heure
     };
   }
+
+  Map<String, dynamic> ok(row) {
+  return {
+    "status": "ok",
+    "message": "OK",
+    "patient": idPatient,
+    "heure": heure
+  };
+}
+
+
+
+
 }
