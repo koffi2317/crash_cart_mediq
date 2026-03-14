@@ -7,27 +7,24 @@ class Detector {
 
   Map<int, double> lastDose = {};
 
-  // --- LISTE BLANCHE : Volumes Bolus autorisés > 5ml ---
   static const Set<String> _bolusDoseExemptions = {
-    "Dextrose",
-    "Bicarbonate de sodium",
-    "Bicarbonnate de sodium",
-    "Chlorure de calcium",
-    "Soluté physiologique",
-    "Albumine",
-    "Mannitol",
-    "Magnésium",
-    "Potassium",
+    "dextrose",
+    "bicarbonate de sodium",
+    "bicarbonnate de sodium",
+    "chlorure de calcium",
+    "soluté physiologique",
+    "albumine",
+    "mannitol",
+    "magnésium",
+    "potassium",
   };
 
-  // --- LIMITES IM SPÉCIFIQUES ---
   static const Map<String, double> _imDoseLimits = {
-    "Épinéphrine": 0.5,
-    "Atropine": 1.0,
+    "épinéphrine": 0.5,
+    "atropine": 1.0,
   };
 
   Map<String, dynamic> analyser(LigneData row) {
-    // 1. Nettoyage et sécurisation des données
     Fr = int.tryParse(row.fr.toString()) ?? 0;
     Sat = int.tryParse(row.sat.toString()) ?? 0;
     Fc = int.tryParse(row.fc.toString()) ?? 0;
@@ -37,98 +34,123 @@ class Detector {
     dose = row.dose;
     concentration = row.concentration;
     volumePerfusion = row.volumePerfusion;
-    administration = row.administration.trim();
-    medicament = row.medicament.trim();
+    administration = row.administration.trim().toLowerCase();
+    medicament = row.medicament.trim().toLowerCase();
     idPatient = int.tryParse(row.idPatient.toString()) ?? 0;
     heure = row.heure;
 
     double quantiteMg = dose * concentration;
 
     // ================================================================
-    // BLOC A — COHÉRENCE PHYSIQUE (ERREURS ROUGES)
+    // A — COHÉRENCE PHYSIQUE
     // ================================================================
 
-    // A1. Tension impossible
     if (Tas > 0 && Tad > 0 && Tas <= Tad) {
       return error("illogicalVitals", "Tension impossible : TAS ($Tas) ≤ TAD ($Tad)");
     }
 
-    // A2. Température absurde
     if (Temp > 42.5 || (Temp < 30.0 && Temp > 0)) {
       return error("illogicalVitals", "Température non physiologique ($Temp °C)");
     }
 
-    // A3. Perfusion sans volume
-    if (administration.toLowerCase().contains("perfusion") && concentration > 0 && volumePerfusion <= 0) {
-      return error("illogicalData", "Perfusion : Volume manquant pour $medicament");
+    // Perfusion sans volume
+    if (administration.contains("perfusion") && concentration > 0 && volumePerfusion <= 0) {
+      return error("illogicalData", "Perfusion sans volume pour $medicament");
     }
 
     // ================================================================
-    // BLOC B — SÉCURITÉ MÉDICAMENTEUSE (ERREURS ROUGES)
+    // B — COHÉRENCE DOSE / CONCENTRATION / VOLUME
     // ================================================================
 
-    // B1. Validation de la Quantité Totale (Mg)
-    // Exemple : Naloxone 0.4mg max
-    if (medicament.toLowerCase().contains("naloxone") && quantiteMg > 0.41) {
-      return error("wrongDose", "Quantité excessive : ${quantiteMg.toStringAsFixed(2)} mg (Max 0.4mg)");
-    }
-
-    // B2. Validation du Volume Bolus (Ml)
-    if (administration.toLowerCase() == "bolus" && dose > 5) {
-      bool exempted = _bolusDoseExemptions.any(
-          (med) => medicament.toLowerCase().contains(med.toLowerCase()));
-      if (!exempted) {
-        return error("wrongDose", "Volume Bolus trop élevé : $dose ml");
+    // B1. Vérification dose = C × V
+    double doseCalculee = concentration * volumePerfusion;
+    if (volumePerfusion > 0 && concentration > 0) {
+      if ((doseCalculee - dose).abs() > 0.5) {
+        return error("doseMismatch",
+            "Dose incohérente : dose=$dose ml vs C×V=${doseCalculee.toStringAsFixed(2)}");
       }
     }
 
-    // B3. Validation IM
-    if (administration.toLowerCase() == "im") {
+    // B2. Volume trop élevé pour un bolus
+    if (administration == "bolus" && volumePerfusion > 20) {
+      return error("wrongVolume", "Volume trop élevé pour un bolus : $volumePerfusion ml");
+    }
+
+    // B3. Volume trop faible pour une perfusion
+    if (administration.contains("perfusion") && volumePerfusion < 20) {
+      return error("wrongVolume", "Volume trop faible pour une perfusion : $volumePerfusion ml");
+    }
+
+    // ================================================================
+    // C — SÉCURITÉ MÉDICAMENTEUSE
+    // ================================================================
+
+    // C1. Naloxone dose max
+    if (medicament.contains("naloxone") && quantiteMg > 0.41) {
+      return error("wrongDose", "Naloxone excessive : ${quantiteMg.toStringAsFixed(2)} mg (max 0.4 mg)");
+    }
+
+    // C2. Bolus > 5 ml sauf exceptions
+    if (administration == "bolus" && dose > 5) {
+      bool exempted = _bolusDoseExemptions.any((med) => medicament.contains(med));
+      if (!exempted) {
+        return error("wrongDose", "Bolus trop élevé : $dose ml");
+      }
+    }
+
+    // C3. IM limites spécifiques
+    if (administration == "im") {
       double limite = _imDoseLimits[medicament] ?? 3.0;
       if (dose > limite) {
-        return error("wrongDose", "Volume IM trop élevé pour $medicament ($dose ml)");
+        return error("wrongDose", "Dose IM trop élevée pour $medicament : $dose ml");
       }
     }
 
-    // B4. Omission de traitement (Naloxone requis)
-    if (Fr < 8 && Sat < 90 && !medicament.toLowerCase().contains("naloxone")) {
-      return error("wrongDrug", "Urgence : Naloxone requis (FR $Fr, SAT $Sat%)");
+    // C4. Naloxone manquante en détresse respiratoire
+    if (Fr < 8 && Sat < 90 && !medicament.contains("naloxone")) {
+      return error("wrongDrug", "Naloxone requise (FR $Fr, SAT $Sat%)");
     }
 
     // ================================================================
-    // BLOC C — ALERTES CLINIQUES (WARNING JAUNE)
+    // D — ALERTES CLINIQUES (WARNING)
     // ================================================================
 
-    // C1. Fièvre
     if (Temp >= 38.0) {
       return warning("fièvre", "Fièvre détectée : $Temp °C");
     }
 
-    // C2. État de choc suspecté
     if (Fc > 110 && Tas < 95 && Tas > 0) {
       return warning("clinicalAlert", "Signes de choc : FC $Fc bpm / TAS $Tas mmHg");
     }
 
-    // C3. Hypoxie légère
     if (Sat > 0 && Sat < 92 && Fr >= 8) {
-      return warning("hypoxie", "Saturation basse : $Sat %");
+      return warning("hypoxie", "Saturation basse : $Sat%");
     }
 
-    // Finalisation
     lastDose[idPatient] = dose;
     return ok();
   }
 
-  // --- RÉPONSES ---
   Map<String, dynamic> ok() => {
-    "status": "ok", "message": "Données normales", "patient": idPatient, "heure": heure
-  };
+        "status": "ok",
+        "message": "Données normales",
+        "patient": idPatient,
+        "heure": heure
+      };
 
   Map<String, dynamic> warning(String type, String msg) => {
-    "status": "warning", "type": type, "message": msg, "patient": idPatient, "heure": heure
-  };
+        "status": "warning",
+        "type": type,
+        "message": msg,
+        "patient": idPatient,
+        "heure": heure
+      };
 
   Map<String, dynamic> error(String type, String msg) => {
-    "status": "error", "type": type, "message": msg, "patient": idPatient, "heure": heure
-  };
+        "status": "error",
+        "type": type,
+        "message": msg,
+        "patient": idPatient,
+        "heure": heure
+      };
 }
