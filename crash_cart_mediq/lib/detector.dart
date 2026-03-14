@@ -24,12 +24,13 @@ if(administration=="Perfusion"){
 
 }
 
-else if ( FR<8 && Sat<90 && medicament != "Naloxone"){ 
+else if ( Fr<8 && Sat<90 && medicament != "Naloxone"){ 
 
+return isWrongDrug(row);
 
 }
 
-
+else if ()
 
 
 else { 
