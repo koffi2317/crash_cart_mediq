@@ -1,130 +1,112 @@
 class Detector {
-//signes vitaux;
-int Fr;
-int Sat;
-int Fc; 
-int Tas; 
-int Tad;
+  // signes vitaux
+  int Fr;
+  int Sat;
+  int Fc;
+  int Tas;
+  int Tad;
+  int Temp;
 
-int Temp;
-//medication variables
-double dose; 
-double concentration;
-String administration;
-String medicament;
-//variable juste [pour le moment] pour identifier le patient
-int idPatient; 
-String heure;
+  // medication variables
+  double dose;
+  double concentration;
+  String administration;
+  String medicament;
 
-Map<int, double> lastDose = {};
+  // patient
+  int idPatient;
+  String heure;
 
+  Map<int, double> lastDose = {};
 
+  void analyser(row) {
 
+    //  Perfusion =toujours OK
+    if (administration == "Perfusion") {
+      print("ok");
+      lastDose[idPatient] = dose;
+      return;
+    }
 
-void analyser(row){
+    //  Mauvais médicament
+    if (Fr < 8 && Sat < 90 && medicament != "Naloxone") {
+      return isWrongDrug(row);
+    }
 
-if(administration=="Perfusion"){
-  print("ok");
-  lastDose[idPatient] = dose;
-  return;
+    //  Bolus trop grand
+    if (administration == "Bolus" && dose > 5) {
+      return isWrongDose(row);
+    }
 
+    //  IM trop grand
+    if (administration == "IM" && dose > 3) {
+      return isWrongDose(row);
+    }
 
-}
+    //  Dose totale incohérente
+    if ((dose * concentration) > 100 || (dose * concentration) < 0.1) {
+      return isWrongDose(row);
+    }
 
-else if ( Fr<8 && Sat<90 && medicament != "Naloxone"){ 
-
-return isWrongDrug(row);
-
-}
-
-// 1) Bolus trop grand
-else if (administration == "Bolus" && dose > 5) {
-  return isWrongDose(row);
-}
-
-// 2) IM trop grand
-else if (administration == "IM" && dose > 3) {
-  return isWrongDose(row);
-}
-
-// 3) Dose totale incohérente (dose * concentration)
-else if ((dose * concentration) > 100 || (dose * concentration) < 0.1) {
-  return isWrongDose(row);
-}
-
-// 4) Dose très différente de la précédente
-else if (lastDose.containsKey(idPatient) &&
+    //  Dose très différente de la précédente
+    if (lastDose.containsKey(idPatient) &&
         (dose > lastDose[idPatient]! * 5 || dose < lastDose[idPatient]! / 5)) {
- {
-  return isWrongDose(row);
- } 
+      return isWrongDose(row);
+    }
 
-        }
+    //  Mauvaise administration
+    if (administration == "IM" && concentration > 50) {
+      return isWrongAdministration(row);
+    }
 
+    if (administration == "Bolus" && concentration < 0.1) {
+      return isWrongAdministration(row);
+    }
 
-else if (administration == "IM" && concentration > 50) {
-    return isWrongAdministration(row);
+    if (administration == "Bolus" && dose > 10) {
+      return isWrongAdministration(row);
+    }
+
+    if (administration == "IM" && dose > 5) {
+      return isWrongAdministration(row);
+    }
+
+    //  Incohérence vitale
+    if (Fr < 5 && Sat > 95) {
+      return isIllogicalForVitals(row);
+    }
+
+    if (Fc < 20 || Fc > 220) {
+      return isIllogicalForVitals(row);
+    }
+
+    if (Tas < 60 || Tas > 220) {
+      return isIllogicalForVitals(row);
+    }
+
+    if (Tas < 80 && Fc < 40) {
+      return isIllogicalForVitals(row);
+    }
+
+    //  OK final
+    print("ok");
+    lastDose[idPatient] = dose;
+    return;
   }
 
-  //  Médicament très dilué donné en bolus → suspect
-  else if (administration == "Bolus" && concentration < 0.1) {
-    return isWrongAdministration(row);
+  void isWrongDrug(row) {
+    print("ERREUR : mauvais médicament");
   }
 
-  //  Volume incohérent pour la voie (sécurité supplémentaire)
-  else if (administration == "Bolus" && dose > 10) {
-    return isWrongAdministration(row);
-  }
-  else if (administration == "IM" && dose > 5) {
-    return isWrongAdministration(row);
+  void isWrongDose(row) {
+    print("ERREUR : dose incorrecte");
   }
 
-else if (Fr < 5 && Sat > 95) {
-    return isIllogicalForVitals(row);
+  void isWrongAdministration(row) {
+    print("ERREUR : voie d'administration incorrecte");
   }
 
-  //  Valeurs extrêmes
-  else if (Fc < 20 || Fc > 220) {
-    return isIllogicalForVitals(row);
+  void isIllogicalForVitals(row) {
+    print("ERREUR : incohérence avec les signes vitaux");
   }
-  else if (Tas < 60 || Tas > 220) {
-    return isIllogicalForVitals(row);
-  }
-
-  //  Tension très basse + FC très basse → incohérent
-  else if (Tas < 80 && Fc < 40) {
-    return isIllogicalForVitals(row);
-  }
-
-
-
-   print("ok");
-lastDose[idPatient] = dose;
-return;
-}
-
-
-
-
-void isWrongDrug(row){
-print("ERREUR : mauvais médicament");
-}
-
-void isWrongDose(row){
-print("ERREUR : dose incorrecte");
-}
-
-void isWrongAdministration(row){
-print("ERREUR : voie d'administration incorrecte");
-}
-
-void isIllogicalForVitals(row){
-print("ERREUR : incohérence avec les signes vitaux");
-}
-
-
-
-
-
-
 }
