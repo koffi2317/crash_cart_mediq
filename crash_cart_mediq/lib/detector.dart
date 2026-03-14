@@ -18,11 +18,23 @@ String heure;
 
 void analyser(row){
 
-if ( FR<8 && Sat<90 && ){ 
+if(administration=="Perfusion"){
+  print("ok");
 
 
 }
 
+else if ( FR<8 && Sat<90 && medicament != "Naloxone"){ 
+
+
+}
+
+
+
+
+else { 
+  print("ok");
+}
 
 }
 
