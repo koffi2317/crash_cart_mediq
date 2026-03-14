@@ -21,6 +21,19 @@ class Detector {
 
   void analyser(row) {
 
+Fr = row.fr;
+Sat = row.sat;
+Fc = row.fc;
+Tas = row.tas;
+Tad = row.tad;
+Temp = row.temp;
+dose = row.dose;
+concentration = row.concentration;
+administration = row.administration;
+medicament = row.medicament;
+idPatient = row.idPatient;
+heure = row.heure;
+
     //  Perfusion =toujours OK
     if (administration == "Perfusion") {
       print("ok");
@@ -94,19 +107,45 @@ class Detector {
     return;
   }
 
-  void isWrongDrug(row) {
+  Map<String, dynamic> isWrongDrug(row) {
     print("ERREUR : mauvais médicament");
+    return {
+      "status": "error",
+      "type": "wrongDrug",
+      "message": "Mauvais médicament",
+      "patient": idPatient,
+      "heure": heure
+    };
   }
 
-  void isWrongDose(row) {
-    print("ERREUR : dose incorrecte");
+  Map<String, dynamic> isWrongDose(row) {
+    return {
+    "status": "error",
+    "type": "wrongDose",
+    "message": "Dose incorrecte",
+    "patient": idPatient,
+    "heure": heure
+  };
   }
 
-  void isWrongAdministration(row) {
-    print("ERREUR : voie d'administration incorrecte");
+  Map<String, dynamic> isWrongAdministration(row) {
+    
+    return {
+      "status": "error",
+      "type": "wrongAdministration",
+      "message": "Voie d'administration incorrecte",
+      "patient": idPatient,
+      "heure": heure
+    };
   }
 
-  void isIllogicalForVitals(row) {
-    print("ERREUR : incohérence avec les signes vitaux");
+  Map<String, dynamic> isIllogicalForVitals(row) {
+    return {
+      "status": "error",
+      "type": "illogicalForVitals",
+      "message": "Incohérence avec les signes vitaux",
+      "patient": idPatient,
+      "heure": heure
+    };
   }
 }
