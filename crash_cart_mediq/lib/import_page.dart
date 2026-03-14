@@ -42,17 +42,13 @@ class _ImportPageState extends State<ImportPage> {
   }
 
   Future<void> _readCsv(String path) async {
-    print("Début du chargement CSV...");
     final input = File(path).openRead();
     final csv = await input
         .transform(utf8.decoder)
         .transform(const CsvToListConverter())
         .toList();
 
-    if (csv.isEmpty) {
-      print("Erreur : Fichier CSV vide.");
-      return;
-    }
+    if (csv.isEmpty) return;
 
     csv.removeAt(0);
     final detector = Detector();
@@ -78,16 +74,12 @@ class _ImportPageState extends State<ImportPage> {
       var resultat = detector.analyser(ligne);
       _updateUI(ligne, resultat);
     }
-
-    print("CSV chargé et analysé : ${csv.length} lignes traitées.");
   }
 
   Future<void> _readExcel(String path) async {
-    print("Début du chargement Excel...");
     var bytes = File(path).readAsBytesSync();
     var excel = Excel.decodeBytes(bytes);
     final detector = Detector();
-    int count = 0;
 
     for (var table in excel.tables.keys) {
       for (var row in excel.tables[table]!.rows.skip(1)) {
@@ -110,11 +102,8 @@ class _ImportPageState extends State<ImportPage> {
 
         var resultat = detector.analyser(ligne);
         _updateUI(ligne, resultat);
-        count++;
       }
     }
-
-    print("Excel chargé et analysé : $count lignes traitées.");
   }
 
   void _updateUI(LigneData ligne, Map<String, dynamic> resultat) {
@@ -140,15 +129,12 @@ class _ImportPageState extends State<ImportPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-
-        // 👇 BOUTON RETOUR AJOUTÉ ICI
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
-            Navigator.maybePop(context);
+            Navigator.pop(context); // 👈 RETOUR FONCTIONNEL
           },
         ),
-
         title: const Text('Analyse des fichiers médicaux'),
         backgroundColor: Colors.blueGrey,
       ),
