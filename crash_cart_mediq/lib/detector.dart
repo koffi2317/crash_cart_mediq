@@ -30,7 +30,22 @@ return isWrongDrug(row);
 
 }
 
-else if ()
+else if (administration=="bolus" && dose>0.5||  ){ 
+
+
+  return isWrongDose(row);
+}
+
+
+else if (){
+  return isWrongAdministration(row);
+}
+
+else if (){ 
+
+  return isIllogicalForVitals(row);
+
+}
 
 
 else { 
