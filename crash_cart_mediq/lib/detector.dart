@@ -1,102 +1,107 @@
 import 'models.dart';
 
 class Detector {
-  late int Fr, Sat, Fc, Tas, Tad, Temp, idPatient;
-  late double dose, concentration;
+  // Variables de session pour les calculs
+  late int Fr, Sat, Fc, Tas, Tad, idPatient;
+  late double Temp, dose, concentration, volumePerfusion;
   late String administration, medicament, heure;
 
   Map<int, double> lastDose = {};
 
   Map<String, dynamic> analyser(LigneData row) {
-    // Conversion et sécurisation des données
+    // 1. Conversion et sécurisation des données
+    // Utilisation de double pour Temp pour gérer les virgules (ex: 36.5)
     Fr = int.tryParse(row.fr.toString()) ?? 0;
     Sat = int.tryParse(row.sat.toString()) ?? 0;
     Fc = int.tryParse(row.fc.toString()) ?? 0;
     Tas = int.tryParse(row.tas.toString()) ?? 0;
     Tad = int.tryParse(row.tad.toString()) ?? 0;
-    Temp = int.tryParse(row.temp.toString()) ?? 0;
+    Temp = double.tryParse(row.temp.toString()) ?? 0.0;
+    
     dose = row.dose;
     concentration = row.concentration;
+    volumePerfusion = row.volumePerfusion;
     administration = row.administration;
     medicament = row.medicament;
     idPatient = int.tryParse(row.idPatient.toString()) ?? 0;
     heure = row.heure;
 
-    // 1. Perfusion = toujours OK
-    if (administration == "Perfusion") {
-      lastDose[idPatient] = dose;
-      return ok();
+    // --- RÈGLES DE SÉCURITÉ MÉDICAMENTEUSE ---
+
+    // A. Vérification Volume vs Concentration (Critique pour Patient 2 - 11:02)
+    if (concentration > 0 && volumePerfusion <= 0) {
+      return error("illogicalData", "Concentration présente sans volume de perfusion");
     }
 
-    // 2. Mauvais médicament (dépression respiratoire)
+    // B. Mauvais médicament (Dépression respiratoire)
     if (Fr < 8 && Sat < 90 && medicament != "Naloxone") {
-      return error("wrongDrug", "Mauvais médicament (Attendu: Naloxone)");
+      return error("wrongDrug", "Urgence : Naloxone attendu (FR/SAT bas)");
     }
 
-    // 3. Dose critique Bolus/IM
+    // C. Doses critiques selon l'administration
     if (administration == "Bolus" && dose > 5) {
-      return error("wrongDose", "Bolus trop grand");
+      return error("wrongDose", "Dose Bolus trop élevée (>5ml)");
     }
     if (administration == "IM" && dose > 3) {
-      return error("wrongDose", "IM trop grand");
+      return error("wrongDose", "Dose IM trop élevée (>3ml)");
     }
 
-    // 4. Incohérence Dose Totale
-    if ((dose * concentration) > 100 || (dose * concentration) < 0.1) {
-      return error("wrongDose", "Dose totale incohérente");
+    // --- RÈGLES SUR LES SIGNES VITAUX ---
+
+    // D. Tension impossible (Critique pour Patient 1 - 10:17)
+    if (Tas <= Tad && Tas != 0) {
+      return error("illogicalVitals", "Tension impossible (TAS $Tas <= TAD $Tad)");
     }
 
-    // -----------------------------
-    // 🔥 NOUVELLES RÈGLES LOGIQUES
-    // -----------------------------
-
-    // 5. TA incohérente
-    if (Tas < Tad) {
-      return error("illogicalVitals", "Tension impossible (TAS < TAD)");
+    // E. Température (Jaune pour fièvre, Rouge pour impossible)
+    if (Temp > 42.0 || Temp < 30.0) {
+      return error("illogicalVitals", "Température non physiologique ($Temp°C)");
     }
-    if (Tas < 50 || Tas > 250) {
-      return error("illogicalVitals", "Tension systolique incohérente");
-    }
-    if (Tad < 30 || Tad > 150) {
-      return error("illogicalVitals", "Tension diastolique incohérente");
+    if (Temp >= 38.0) {
+      return warning("Alerte Fièvre", "Le patient est fébrile ($Temp°C)");
     }
 
-    // 6. Température incohérente
-    if (Temp < 30 || Temp > 42) {
-      return error("illogicalVitals", "Température non physiologique");
-    }
-
-    // 7. Relation FC ↔ TA
+    // F. Cohérence Cardio-vasculaire
     if (Fc > 150 && Tas < 80) {
-      return error("illogicalVitals", "FC élevée avec TA basse");
+      return error("illogicalVitals", "Choc : FC élevée avec TA très basse");
     }
     if (Fc < 40 && Tas < 80) {
-      return error("illogicalVitals", "Bradycardie avec hypotension");
+      return error("illogicalVitals", "Bradycardie sévère avec hypotension");
     }
 
-    // 8. Relation FR ↔ SAT
-    if (Fr > 30 && Sat < 85) {
-      return error("illogicalVitals", "FR élevée avec saturation basse");
-    }
-
-    // 9. Signes vitaux impossibles (déjà existants)
+    // G. Signes respiratoires contradictoires
     if (Fr < 5 && Sat > 95) {
-      return error("illogicalVitals", "Signes vitaux contradictoires");
-    }
-    if (Fc < 20 || Fc > 220) {
-      return error("illogicalVitals", "Fréquence cardiaque impossible");
+      return error("illogicalVitals", "Incohérence : FR très basse avec SAT normale");
     }
 
-    // 10. Mise à jour dose précédente
+    // H. Limites physiques extrêmes
+    if (Fc < 20 || Fc > 220) {
+      return error("illogicalVitals", "Fréquence cardiaque hors limites humaines");
+    }
+
+    // Mise à jour de la dernière dose si tout est OK
     lastDose[idPatient] = dose;
 
     return ok();
   }
 
+  // --- RÉPONSES ---
+
   Map<String, dynamic> ok() {
     return {
       "status": "ok",
-      "message": "OK",
+      "message": "Données cohérentes",
+      "patient": idPatient,
+      "heure": heure,
+      "type": ""
+    };
+  }
+
+  Map<String, dynamic> warning(String type, String msg) {
+    return {
+      "status": "warning", // Déclenchera la couleur Ambre/Jaune
+      "type": type,
+      "message": msg,
       "patient": idPatient,
       "heure": heure
     };
@@ -104,7 +109,7 @@ class Detector {
 
   Map<String, dynamic> error(String type, String msg) {
     return {
-      "status": "error",
+      "status": "error", // Déclenchera la couleur Rouge
       "type": type,
       "message": msg,
       "patient": idPatient,

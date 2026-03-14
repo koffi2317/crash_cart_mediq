@@ -41,6 +41,7 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
+  // ---------------- CSV ----------------
   Future<void> _readCsv(String path) async {
     final input = File(path).openRead();
     final csv = await input
@@ -50,11 +51,31 @@ class _ImportPageState extends State<ImportPage> {
 
     if (csv.isEmpty) return;
 
-    csv.removeAt(0);
+    csv.removeAt(0); // En-tête
+    _processRows(csv);
+  }
+
+  // ---------------- EXCEL ----------------
+  Future<void> _readExcel(String path) async {
+    var bytes = File(path).readAsBytesSync();
+    var excel = Excel.decodeBytes(bytes);
+
+    for (var table in excel.tables.keys) {
+      var rows = excel.tables[table]!.rows
+          .skip(1)
+          .map((r) => r.map((c) => c?.value).toList())
+          .toList();
+
+      _processRows(rows);
+    }
+  }
+
+  // ---------------- TRAITEMENT ----------------
+  void _processRows(List<List<dynamic>> rows) {
     final detector = Detector();
 
-    for (var row in csv) {
-      if (row.length < 12) continue;
+    for (var row in rows) {
+      if (row.length < 13) continue; // IMPORTANT : 13 colonnes maintenant
 
       var ligne = LigneData(
         idPatient: row[0],
@@ -69,55 +90,18 @@ class _ImportPageState extends State<ImportPage> {
         dose: double.tryParse(row[9].toString()) ?? 0,
         concentration: double.tryParse(row[10].toString()) ?? 0,
         administration: row[11].toString(),
+        volumePerfusion: double.tryParse(row[12].toString()) ?? 0, // 👈 AJOUT ESSENTIEL
       );
 
       var resultat = detector.analyser(ligne);
-      _updateUI(ligne, resultat);
-    }
-  }
 
-  Future<void> _readExcel(String path) async {
-    var bytes = File(path).readAsBytesSync();
-    var excel = Excel.decodeBytes(bytes);
-    final detector = Detector();
-
-    for (var table in excel.tables.keys) {
-      for (var row in excel.tables[table]!.rows.skip(1)) {
-        if (row.length < 12) continue;
-
-        var ligne = LigneData(
-          idPatient: row[0]?.value ?? 0,
-          heure: row[1]?.value.toString() ?? '',
-          fc: row[2]?.value ?? 0,
-          tas: row[3]?.value ?? 0,
-          tad: row[4]?.value ?? 0,
-          fr: row[5]?.value ?? 0,
-          sat: row[6]?.value ?? 0,
-          temp: row[7]?.value ?? 0,
-          medicament: row[8]?.value.toString() ?? '',
-          dose: double.tryParse(row[9]?.value.toString() ?? '0') ?? 0,
-          concentration: double.tryParse(row[10]?.value.toString() ?? '0') ?? 0,
-          administration: row[11]?.value.toString() ?? '',
-        );
-
-        var resultat = detector.analyser(ligne);
-        _updateUI(ligne, resultat);
-      }
-    }
-  }
-
-  void _updateUI(LigneData ligne, Map<String, dynamic> resultat) {
-    setState(() {
-      resultats.add({
-        "patient": ligne.idPatient,
-        "heure": ligne.heure,
-        "status": resultat["status"],
-        "message": resultat["message"],
-        "type": resultat["type"]
+      setState(() {
+        resultats.add(resultat);
       });
-    });
+    }
   }
 
+  // ---------------- RESET ----------------
   void clearFile() {
     setState(() {
       fileName = 'Aucun fichier importé';
@@ -125,15 +109,14 @@ class _ImportPageState extends State<ImportPage> {
     });
   }
 
+  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context); // 👈 RETOUR FONCTIONNEL
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: const Text('Analyse des fichiers médicaux'),
         backgroundColor: Colors.blueGrey,
@@ -174,18 +157,29 @@ class _ImportPageState extends State<ImportPage> {
                 itemBuilder: (context, index) {
                   var r = resultats[index];
                   bool isError = r["status"] == "error";
+                  bool isWarning = r["status"] == "warning";
 
                   return Card(
-                    color: isError ? Colors.red[50] : Colors.white,
+                    color: isError
+                        ? Colors.red[50]
+                        : isWarning
+                            ? Colors.yellow[100]
+                            : Colors.green[50],
                     child: ListTile(
                       leading: Icon(
-                        isError ? Icons.error : Icons.check_circle,
-                        color: isError ? Colors.red : Colors.green,
+                        isError
+                            ? Icons.error
+                            : isWarning
+                                ? Icons.warning
+                                : Icons.check_circle,
+                        color: isError
+                            ? Colors.red
+                            : isWarning
+                                ? Colors.orange
+                                : Colors.green,
                       ),
                       title: Text("Patient ${r["patient"]} — ${r["heure"]}"),
-                      subtitle: Text(
-                        "${r["message"]} ${isError ? '(${r["type"]})' : ''}"
-                      ),
+                      subtitle: Text("${r["message"]} (${r["type"]})"),
                     ),
                   );
                 },

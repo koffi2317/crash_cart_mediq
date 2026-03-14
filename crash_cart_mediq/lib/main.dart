@@ -79,16 +79,18 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
+  // ---------------- CSV ----------------
   Future<void> _readCsv(String path) async {
     final bytes = await File(path).readAsBytes();
     final csv = const CsvToListConverter().convert(utf8.decode(bytes));
 
     if (csv.isEmpty) return;
 
-    csv.removeAt(0);
+    csv.removeAt(0); // En-tête
     _processRows(csv);
   }
 
+  // ---------------- EXCEL ----------------
   Future<void> _readExcel(String path) async {
     var bytes = File(path).readAsBytesSync();
     var excel = Excel.decodeBytes(bytes);
@@ -103,11 +105,12 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
+  // ---------------- TRAITEMENT ----------------
   void _processRows(List<List<dynamic>> rows) {
     final detector = Detector();
 
     for (var row in rows) {
-      if (row.length < 12) continue;
+      if (row.length < 13) continue; // IMPORTANT : 13 colonnes maintenant
 
       var data = LigneData(
         idPatient: row[0],
@@ -122,6 +125,7 @@ class _ImportPageState extends State<ImportPage> {
         dose: double.tryParse(row[9].toString()) ?? 0,
         concentration: double.tryParse(row[10].toString()) ?? 0,
         administration: row[11].toString(),
+        volumePerfusion: double.tryParse(row[12].toString()) ?? 0, // 👈 AJOUT
       );
 
       var res = detector.analyser(data);
@@ -132,6 +136,7 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
+  // ---------------- RESET ----------------
   void clearFile() {
     setState(() {
       fileName = 'Aucun fichier importé';
@@ -139,6 +144,7 @@ class _ImportPageState extends State<ImportPage> {
     });
   }
 
+  // ---------------- UI ----------------
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -148,12 +154,9 @@ class _ImportPageState extends State<ImportPage> {
         title: const Text('Analyse des fichiers médicaux'),
         backgroundColor: Colors.blueGrey,
 
-        // BOUTON RETOUR FONCTIONNEL
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
 
@@ -195,16 +198,29 @@ class _ImportPageState extends State<ImportPage> {
               itemCount: resultats.length,
               itemBuilder: (context, i) {
                 bool isErr = resultats[i]["status"] == "error";
+                bool isWarn = resultats[i]["status"] == "warning";
 
                 return Card(
-                  color: isErr ? Colors.red[50] : Colors.green[50],
+                  color: isErr
+                      ? Colors.red[50]
+                      : isWarn
+                          ? Colors.yellow[100]
+                          : Colors.green[50],
                   child: ListTile(
                     leading: Icon(
-                      isErr ? Icons.warning : Icons.check_circle,
-                      color: isErr ? Colors.red : Colors.green,
+                      isErr
+                          ? Icons.error
+                          : isWarn
+                              ? Icons.warning
+                              : Icons.check_circle,
+                      color: isErr
+                          ? Colors.red
+                          : isWarn
+                              ? Colors.orange
+                              : Colors.green,
                     ),
                     title: Text("Patient ${resultats[i]["patient"]} - ${resultats[i]["heure"]}"),
-                    subtitle: Text(resultats[i]["message"]),
+                    subtitle: Text("${resultats[i]["message"]} (${resultats[i]["type"]})"),
                   ),
                 );
               },

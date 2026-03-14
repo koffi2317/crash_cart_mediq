@@ -11,6 +11,7 @@ class LigneData {
   final double dose;
   final double concentration;
   final String administration;
+  final double volumePerfusion; 
 
   LigneData({
     required this.idPatient,
@@ -25,5 +26,6 @@ class LigneData {
     required this.dose,
     required this.concentration,
     required this.administration,
+    required this.volumePerfusion, 
   });
 }
