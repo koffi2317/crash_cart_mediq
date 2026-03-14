@@ -1,30 +1,9 @@
-import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'detector.dart';
-
-void main() {
-  runApp(const CrashCartApp());
-}
-
-class CrashCartApp extends StatelessWidget {
-  const CrashCartApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Crash Cart MEDIQ',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const ImportPage(),
-      debugShowCheckedModeBanner: false,
-    );
-  }
-}
 
 class ImportPage extends StatefulWidget {
   const ImportPage({super.key});
@@ -34,11 +13,11 @@ class ImportPage extends StatefulWidget {
 }
 
 class _ImportPageState extends State<ImportPage> {
-  String fichier = 'Aucun fichier sélectionné';
+  String fileName = 'Aucun fichier importé';
   List<String> resultats = [];
 
-  // Fonction principale pour choisir un fichier
-  Future<void> importerFichier() async {
+  Future<void> pickFile() async {
+    // Ouvre le sélecteur de fichiers
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'xlsx'],
@@ -46,68 +25,58 @@ class _ImportPageState extends State<ImportPage> {
 
     if (result == null) return; // utilisateur a annulé
 
-    String? fichierPath = result.files.single.path;
-    String nomFichier = result.files.single.name;
+    final path = result.files.single.path!;
+    final name = result.files.single.name;
 
     setState(() {
-      fichier = nomFichier;
+      fileName = name;
       resultats.clear();
     });
 
-    if (fichierPath == null) return;
-
-    // Lecture et analyse du fichier
-    if (fichierPath.endsWith('.csv')) {
-      await lireCSV(fichierPath);
-    } else if (fichierPath.endsWith('.xlsx')) {
-      await lireExcel(fichierPath);
+    // Lecture du fichier selon son extension
+    if (path.endsWith('.csv')) {
+      await _readCsv(path);
+    } else if (path.endsWith('.xlsx')) {
+      await _readExcel(path);
     }
   }
 
-  Future<void> lireCSV(String path) async {
+  Future<void> _readCsv(String path) async {
     final input = File(path).openRead();
-    final csv = await input
-        .transform(utf8.decoder)
-        .transform(const CsvToListConverter())
-        .toList();
+    final csv = await input.transform(utf8.decoder).transform(const CsvToListConverter()).toList();
 
-    if (csv.isEmpty) return;
-    csv.removeAt(0); // retire l’en‑tête
+    csv.removeAt(0); // retire l’en-tête
+    final detector = Detector();
 
-    Detector detecteur = Detector();
-
-    for (var ligne in csv) {
-      LigneData data = LigneData(
-        idPatient: ligne[0],
-        heure: ligne[1],
-        fc: ligne[2],
-        tas: ligne[3],
-        tad: ligne[4],
-        fr: ligne[5],
-        sat: ligne[6],
-        temp: ligne[7],
-        medicament: ligne[8],
-        dose: double.tryParse(ligne[9].toString()) ?? 0,
-        concentration: double.tryParse(ligne[10].toString()) ?? 0,
-        administration: ligne[11],
+    for (var row in csv) {
+      var ligne = LigneData(
+        idPatient: row[0],
+        heure: row[1],
+        fc: row[2],
+        tas: row[3],
+        tad: row[4],
+        fr: row[5],
+        sat: row[6],
+        temp: row[7],
+        medicament: row[8],
+        dose: double.tryParse(row[9].toString()) ?? 0,
+        concentration: double.tryParse(row[10].toString()) ?? 0,
+        administration: row[11],
       );
-
-      List<String> erreurs = detecteur.analyser(data);
-      setState(() => resultats.add(
-          'Patient ${data.idPatient} (${data.heure}) : ${erreurs.join(", ")}'));
+      var erreurs = detector.analyser(ligne);
+      setState(() => resultats.add('Patient ${ligne.idPatient} (${ligne.heure}) : ${erreurs.join(", ")}'));
     }
   }
 
-  Future<void> lireExcel(String path) async {
+  Future<void> _readExcel(String path) async {
     var bytes = File(path).readAsBytesSync();
     var excel = Excel.decodeBytes(bytes);
-    Detector detecteur = Detector();
+    final detector = Detector();
 
     for (var table in excel.tables.keys) {
       for (var row in excel.tables[table]!.rows.skip(1)) {
         if (row.length < 12) continue;
-
-        LigneData data = LigneData(
+        var ligne = LigneData(
           idPatient: row[0]?.value ?? 0,
           heure: row[1]?.value ?? '',
           fc: row[2]?.value ?? 0,
@@ -121,10 +90,8 @@ class _ImportPageState extends State<ImportPage> {
           concentration: double.tryParse(row[10]?.value.toString() ?? '0') ?? 0,
           administration: row[11]?.value ?? '',
         );
-
-        List<String> erreurs = detecteur.analyser(data);
-        setState(() => resultats.add(
-            'Patient ${data.idPatient} (${data.heure}) : ${erreurs.join(", ")}'));
+        var erreurs = detector.analyser(ligne);
+        setState(() => resultats.add('Patient ${ligne.idPatient} (${ligne.heure}) : ${erreurs.join(", ")}'));
       }
     }
   }
@@ -138,12 +105,12 @@ class _ImportPageState extends State<ImportPage> {
         child: Column(
           children: [
             ElevatedButton.icon(
-              onPressed: importerFichier,
+              onPressed: pickFile,
               icon: const Icon(Icons.upload_file),
               label: const Text('Importer un fichier (.csv ou .xlsx)'),
             ),
             const SizedBox(height: 10),
-            Text('Fichier sélectionné : $fichier'),
+            Text('Fichier sélectionné : $fileName'),
             const Divider(),
             Expanded(
               child: ListView.builder(
