@@ -41,9 +41,6 @@ class _ImportPageState extends State<ImportPage> {
     }
   }
 
-  // -----------------------------
-  // LECTURE CSV
-  // -----------------------------
   Future<void> _readCsv(String path) async {
     print("Début du chargement CSV...");
     final input = File(path).openRead();
@@ -57,11 +54,12 @@ class _ImportPageState extends State<ImportPage> {
       return;
     }
 
-    csv.removeAt(0); // Retirer l'en-tête
+    csv.removeAt(0);
     final detector = Detector();
 
     for (var row in csv) {
       if (row.length < 12) continue;
+
       var ligne = LigneData(
         idPatient: row[0],
         heure: row[1].toString(),
@@ -80,14 +78,10 @@ class _ImportPageState extends State<ImportPage> {
       var resultat = detector.analyser(ligne);
       _updateUI(ligne, resultat);
     }
-    
-    // Print après la boucle pour confirmer la fin
+
     print("CSV chargé et analysé : ${csv.length} lignes traitées.");
   }
 
-  // -----------------------------
-  // LECTURE EXCEL
-  // -----------------------------
   Future<void> _readExcel(String path) async {
     print("Début du chargement Excel...");
     var bytes = File(path).readAsBytesSync();
@@ -119,6 +113,7 @@ class _ImportPageState extends State<ImportPage> {
         count++;
       }
     }
+
     print("Excel chargé et analysé : $count lignes traitées.");
   }
 
@@ -134,10 +129,26 @@ class _ImportPageState extends State<ImportPage> {
     });
   }
 
+  void clearFile() {
+    setState(() {
+      fileName = 'Aucun fichier importé';
+      resultats.clear();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+
+        // 👇 BOUTON RETOUR AJOUTÉ ICI
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.maybePop(context);
+          },
+        ),
+
         title: const Text('Analyse des fichiers médicaux'),
         backgroundColor: Colors.blueGrey,
       ),
@@ -145,13 +156,31 @@ class _ImportPageState extends State<ImportPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            ElevatedButton.icon(
-              onPressed: pickFile,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Importer un fichier (.csv ou .xlsx)'),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: pickFile,
+                  icon: const Icon(Icons.upload_file),
+                  label: const Text('Importer'),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton.icon(
+                  onPressed: clearFile,
+                  icon: const Icon(Icons.delete),
+                  label: const Text('Effacer'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 10),
-            Text('Fichier : $fileName', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(
+              'Fichier : $fileName',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             const Divider(),
             Expanded(
               child: ListView.builder(
@@ -159,6 +188,7 @@ class _ImportPageState extends State<ImportPage> {
                 itemBuilder: (context, index) {
                   var r = resultats[index];
                   bool isError = r["status"] == "error";
+
                   return Card(
                     color: isError ? Colors.red[50] : Colors.white,
                     child: ListTile(
@@ -167,7 +197,9 @@ class _ImportPageState extends State<ImportPage> {
                         color: isError ? Colors.red : Colors.green,
                       ),
                       title: Text("Patient ${r["patient"]} — ${r["heure"]}"),
-                      subtitle: Text("${r["message"]} ${isError ? '(${r["type"]})' : ''}"),
+                      subtitle: Text(
+                        "${r["message"]} ${isError ? '(${r["type"]})' : ''}"
+                      ),
                     ),
                   );
                 },
